@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from app.core import db
-from app.core.utility import default_response, reserve_ticket
+from app.core.utility import default_response
+from app.core.book_utility import reserve_ticket, confirm_booking
 from app.core.security import get_current_user
 from app.core.db import SessionLocal
 from app.core.utility import redis_client
@@ -15,23 +16,56 @@ from datetime import datetime
 router = APIRouter()
 
 @router.post("/{ticket_id}")
-def reserve(ticket_id: int,request: Request, current_user = Depends(get_current_user)):
+def reserve(
+    ticket_id: int,
+    request: Request,
+    current_user = Depends(get_current_user)
+):
     """
-    Temporarily reserve a ticket
+    Temporarily reserve a ticket using Redis (with lock)
     """
     db = SessionLocal()
-    ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
-    if not ticket:
-        raise HTTPException(status_code=404, detail=BookTicketMessages.TICKET_NOT_FOUND.value)
-    # if ticket.status != "available":
-    #     raise HTTPException(status_code=400, detail=BookTicketMessages.TICKET_UNAVAILABLE.value)
 
     try:
-        reservation_key = reserve_ticket(current_user.id, ticket_id)
+        # 1. Check if ticket exists
+        ticket = db.query(Ticket).filter(Ticket.id == ticket_id).first()
+        if not ticket:
+            raise HTTPException(
+                status_code=404,
+                detail=BookTicketMessages.TICKET_NOT_FOUND.value
+            )
+
+        # 2. Check availability
+        # if ticket.status != "available":
+        #     raise HTTPException(
+        #         status_code=400,
+        #         detail=BookTicketMessages.TICKET_UNAVAILABLE.value
+        #     )
+
+        # 3. Reserve ticket in Redis (new format)
+        reservation_data = reserve_ticket(
+            user_id=current_user.id,
+            ticket_id=ticket.id,
+            event_id=ticket.event_id
+        )
+
+        # 4. Return response
+        return default_response(
+            data={
+                "reservation_id": reservation_data["reservation_id"],
+                "expires_in": reservation_data["expires_in"]
+            },
+            message=BookTicketMessages.TICKET_RESERVED.value
+        )
+
+    except HTTPException:
+        raise
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-    
-    return default_response(data={"reservation_key": reservation_key}, message=BookTicketMessages.TICKET_RESERVED.value)
+
+    finally:
+        db.close()
 
 
 @router.post("/{ticket_id}/confirm")

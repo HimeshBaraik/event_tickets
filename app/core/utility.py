@@ -3,13 +3,16 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from datetime import datetime
 from typing import Any, Optional
-import json
 import redis
 import smtplib
+import uuid
 from email.mime.text import MIMEText
 from app.core.config import settings
 
+from app.models.booking import UserTicket
+from app.core.email_templates import booking_success_template
 
+# default response
 def default_response(
     data: Any = None,
     message: str = "Success",
@@ -37,7 +40,7 @@ def default_response(
     return output
 
 
-# Redis client
+# Redis operations
 redis_client = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
 def set_key(key: str, value: str, expire: int = None):
@@ -59,31 +62,6 @@ def delete_key(key: str):
     """
     redis_client.delete(key)
     return True
-
-
-# Ticket Reserve and Confirm
-def reserve_ticket(user_id: int, ticket_id: int, ttl: int = 600):
-    """
-    Create temporary reservation in Redis (10 mins default)
-    """
-    key = f"reservation:{user_id}:{ticket_id}"
-    value = json.dumps({"user_id": user_id, "ticket_id": ticket_id})
-    # NX ensures we don’t overwrite if key already exists
-    success = redis_client.set(key, value, ex=ttl, nx=True)
-    if not success:
-        raise Exception("Ticket already reserved")
-    return key
-
-def confirm_ticket(user_id: int, ticket_id: int):
-    """
-    Confirm the reservation and delete it from Redis
-    """
-    key = f"reservation:{user_id}:{ticket_id}"
-    data = redis_client.get(key)
-    if not data:
-        return None
-    redis_client.delete(key)
-    return json.loads(data)
 
 
 # mail sending utility

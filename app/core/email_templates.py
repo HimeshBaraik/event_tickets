@@ -18,7 +18,7 @@ def forgot_password_template(username: str, reset_link: str) -> tuple[str, str]:
 
 
 def booking_success_template(username: str, ticket_id: str, event_name: str) -> tuple[str, str]:
-    subject = "🎟️ Booking Confirmed!"
+    subject = "Booking Confirmed!"
 
     body = f"""
     <html>

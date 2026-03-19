@@ -10,8 +10,10 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     SECRET_KEY: str
     ALGORITHM: str
-    STRIPE_API_KEY: str = ""  # for test payments
+    RAZORPAY_KEY: str = ""  
+    RAZORPAY_SECRET: str = ""  
     STRIPE_CURRENCY: str = "usd"
+
 
     class Config:
         env_file = ".env"
